@@ -54,6 +54,34 @@ TABLES = {
         ],
         "fk": {},
     },
+    # Tables de reference : elles alimentent les listes deroulantes mais ne
+    # sont pas exposees comme onglets de saisie dans l'interface principale.
+    "reference_charge_types": {
+        "label": "Types de charges (reference)",
+        "pk": ["value"],
+        "columns": [
+            {"name": "value", "label": "Type", "type": "text", "pk": True},
+        ],
+        "fk": {},
+    },
+    "reference_puissances_transfos_kva": {
+        "label": "Puissances transformateurs (reference)",
+        "pk": ["value"],
+        "columns": [
+            {"name": "value", "label": "Valeur (kVA)", "type": "number", "pk": True},
+            {"name": "label", "label": "Libelle", "type": "text"},
+        ],
+        "fk": {},
+    },
+    "reference_puissances_groupes_electrogenes_kva": {
+        "label": "Puissances groupes electrogenes (reference)",
+        "pk": ["value"],
+        "columns": [
+            {"name": "value", "label": "Valeur (kVA)", "type": "number", "pk": True},
+            {"name": "label", "label": "Libelle", "type": "text"},
+        ],
+        "fk": {},
+    },
     "tableaux": {
         "label": "Tableaux",
         "pk": ["tag_id"],
@@ -63,8 +91,9 @@ TABLES = {
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
             {"name": "type", "label": "Type", "type": "text"},
             {"name": "tension_v", "label": "Tension (V)", "type": "number"},
+            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag", "optional": True},
         ],
-        "fk": {"site_id": "site"},
+        "fk": {"site_id": "site", "amont_id": "tag"},
     },
     "transfos": {
         "label": "Transformateurs",
@@ -73,8 +102,8 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag", "optional": True},
-            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number"},
+            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number", "options_table": "reference_puissances_transfos_kva"},
+            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
             {"name": "protection_modele", "label": "Protection (modele)", "type": "text", "optional": True},
             {"name": "calibre_a", "label": "Calibre (A)", "type": "number", "optional": True},
             {"name": "differentiel_ma", "label": "Differentiel (mA)", "type": "number", "optional": True},
@@ -88,7 +117,7 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number"},
+            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number", "options_table": "reference_puissances_groupes_electrogenes_kva"},
         ],
         "fk": {"site_id": "site"},
     },
@@ -115,8 +144,8 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag", "optional": True},
-            {"name": "type", "label": "Type", "type": "text"},
+            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
+            {"name": "type", "label": "Type", "type": "text", "options_table": "reference_charge_types"},
             {"name": "section", "label": "Section", "type": "text", "optional": True},
             {"name": "longueur_m", "label": "Longueur (m)", "type": "number", "optional": True},
             {"name": "protection_modele", "label": "Protection (modele)", "type": "text", "optional": True},
@@ -132,15 +161,18 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag", "optional": True},
             {"name": "type", "label": "Type", "type": "text"},
+            {"name": "unite", "label": "Unite", "type": "text"},
+            {"name": "cos_phi", "label": "Cos \u03c6", "type": "number"},
+            {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
+            {"name": "puissance", "label": "Puissance", "type": "number", "optional": True},
+            {"name": "installed_power_kw", "label": "Installed power (kW)", "type": "number"},
             {"name": "protection_modele", "label": "Protection (modele)", "type": "text", "optional": True},
             {"name": "calibre_a", "label": "Calibre (A)", "type": "number", "optional": True},
             {"name": "differentiel_ma", "label": "Differentiel (mA)", "type": "number", "optional": True},
             {"name": "rev", "label": "Rev", "type": "text", "optional": True},
             {"name": "system_area", "label": "System / Area", "type": "text", "optional": True},
             {"name": "equipment_name", "label": "Equipment Name", "type": "text", "optional": True},
-            {"name": "installed_power_kw", "label": "Installed power (kW)", "type": "number", "optional": True},
             {"name": "absorbed_power", "label": "Absorbed power", "type": "number", "optional": True},
             {"name": "voltage", "label": "Voltage", "type": "number", "optional": True},
             {"name": "phase", "label": "Phase", "type": "text", "optional": True},
@@ -150,7 +182,6 @@ TABLES = {
             {"name": "c_i", "label": "C/I", "type": "text", "optional": True},
             {"name": "e_ne", "label": "E/NE", "type": "text", "optional": True},
             {"name": "pct_e", "label": "% E", "type": "number", "optional": True},
-            {"name": "unite", "label": "Unite", "type": "text", "optional": True},
             {"name": "type_equipement", "label": "Type", "type": "text", "optional": True},
             {"name": "vitesse", "label": "Vitesse", "type": "number", "optional": True},
             {"name": "contenu", "label": "Contenu", "type": "text", "optional": True},
@@ -162,7 +193,6 @@ TABLES = {
             {"name": "mode_de_pose", "label": "Mode de pose", "type": "text", "optional": True},
             {"name": "k_util", "label": "K.Util", "type": "number", "optional": True},
             {"name": "k_simul", "label": "K.Simul", "type": "number", "optional": True},
-            {"name": "cos_phi", "label": "Cos \u03c6", "type": "number", "optional": True},
             {"name": "rendement", "label": "Rendement", "type": "number", "optional": True},
             {"name": "switchgear_mcc", "label": "Switchgear / MCC", "type": "text", "optional": True},
             {"name": "equipment_tag_no", "label": "Equipment Tag No", "type": "text", "optional": True},
@@ -477,12 +507,15 @@ def get_graph():
     Reconstruit le graphe d'alimentation electrique (qui alimente quoi) a
     partir des colonnes amont_id (transfos/cable/charge) et de la table
     tableau_jointure (amonts multiples pour un tableau).
-    Un noeud = une ligne de `tag` (deja type). Une arete = amont -> aval.
+    Un noeud = un equipement qui existe encore dans sa table source. Une
+    arete = amont -> aval.  Le registre `tag` est volontairement ignore pour
+    creer les noeuds : il peut conserver un tag pour respecter une cle
+    etrangere apres suppression d'un equipement, sans que cet ancien tag
+    doive rester visible dans le synoptique.
     """
     conn = get_connection()
 
-    tag_rows = conn.execute("SELECT tag, type FROM tag").fetchall()
-    nodes = {r["tag"]: {"id": r["tag"], "type": r["type"], "site_id": None, "detail": None} for r in tag_rows}
+    nodes = {}
 
     detail_queries = {
         "tableaux": "SELECT tag_id AS id, site_id, type AS detail FROM tableaux",
@@ -494,20 +527,30 @@ def get_graph():
     }
     for table, query in detail_queries.items():
         for row in conn.execute(query).fetchall():
-            if row["id"] in nodes:
-                nodes[row["id"]]["site_id"] = row["site_id"]
-                nodes[row["id"]]["detail"] = row["detail"]
+            nodes[row["id"]] = {
+                "id": row["id"],
+                "type": table,
+                "site_id": row["site_id"],
+                "detail": row["detail"],
+            }
 
     edges = []
-    for table in ("transfos", "cable", "charge"):
+    edge_keys = set()
+
+    def add_edge(source, target):
+        if source in nodes and target in nodes and (source, target) not in edge_keys:
+            edge_keys.add((source, target))
+            edges.append({"from": source, "to": target})
+
+    for table in ("tableaux", "transfos", "cable", "charge"):
         rows = conn.execute(
             f"SELECT tag_id, amont_id FROM {table} WHERE amont_id IS NOT NULL"
         ).fetchall()
         for r in rows:
-            edges.append({"from": r["amont_id"], "to": r["tag_id"]})
+            add_edge(r["amont_id"], r["tag_id"])
 
     for r in conn.execute("SELECT tableau_tag, amont_tag FROM tableau_jointure").fetchall():
-        edges.append({"from": r["amont_tag"], "to": r["tableau_tag"]})
+        add_edge(r["amont_tag"], r["tableau_tag"])
 
     conn.close()
     return {"nodes": list(nodes.values()), "edges": edges}

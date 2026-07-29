@@ -186,6 +186,7 @@ def get_connection():
 # volee sur les anciens fichiers-projets qui ne les ont pas encore, pour ne
 # jamais casser un projet existant.
 _SCHEMA_MIGRATIONS = {
+    "tableaux": [("amont_id", "TEXT")],
     "transfos": [("protection_modele", "TEXT"), ("calibre_a", "REAL"), ("differentiel_ma", "REAL")],
     "cable": [("protection_modele", "TEXT"), ("calibre_a", "REAL"), ("differentiel_ma", "REAL"), ("longueur_m", "REAL"), ("section", "TEXT")],
     "charge": [
@@ -199,7 +200,7 @@ _SCHEMA_MIGRATIONS = {
         ("cos_phi_vfd", "REAL"), ("rend_vfd", "REAL"), ("longueur", "REAL"),
         ("mode_de_pose", "TEXT"),
         ("k_util", "REAL"), ("k_simul", "REAL"), ("cos_phi", "REAL"), ("rendement", "REAL"),
-        ("switchgear_mcc", "TEXT"), ("equipment_tag_no", "TEXT"),
+        ("switchgear_mcc", "TEXT"), ("equipment_tag_no", "TEXT"), ("puissance", "REAL"),
     ],
     "tableau_jointure": [("protection_modele", "TEXT"), ("calibre_a", "REAL"), ("differentiel_ma", "REAL")],
     "import_caneco_staging": [
@@ -210,6 +211,23 @@ _SCHEMA_MIGRATIONS = {
 
 
 _NEW_TABLES_SQL = {
+    "reference_charge_types": """
+        CREATE TABLE IF NOT EXISTS reference_charge_types (
+            value TEXT PRIMARY KEY
+        );
+    """,
+    "reference_puissances_transfos_kva": """
+        CREATE TABLE IF NOT EXISTS reference_puissances_transfos_kva (
+            value REAL PRIMARY KEY,
+            label TEXT NOT NULL
+        );
+    """,
+    "reference_puissances_groupes_electrogenes_kva": """
+        CREATE TABLE IF NOT EXISTS reference_puissances_groupes_electrogenes_kva (
+            value REAL PRIMARY KEY,
+            label TEXT NOT NULL
+        );
+    """,
     "import_caneco_staging": """
         CREATE TABLE IF NOT EXISTS import_caneco_staging (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -263,6 +281,33 @@ def _migrate_schema(conn):
         for col_name, col_type in columns:
             if col_name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+
+    # Donnees de reference livrees avec l'application. INSERT OR IGNORE les
+    # preserve si l'utilisateur enrichit ces listes dans un projet.
+    conn.executemany(
+        "INSERT OR IGNORE INTO reference_charge_types (value) VALUES (?)",
+        [("U1000R2V 4G10",), ("U1000R2V 4G16",), ("U1000R2V 4G25",),
+         ("U1000R2V 4G35",), ("U1000R2V 4G50",)],
+    )
+    power_tables = (
+        "reference_puissances_transfos_kva",
+        "reference_puissances_groupes_electrogenes_kva",
+    )
+    if "reference_puissances_kva" in existing_tables:
+        for table in power_tables:
+            conn.execute(
+                f"INSERT OR IGNORE INTO {table} (value, label) "
+                "SELECT value, label FROM reference_puissances_kva"
+            )
+    for table in power_tables:
+        conn.executemany(
+            f"INSERT OR IGNORE INTO {table} (value, label) VALUES (?, ?)",
+            [(250, "250"), (400, "400"), (630, "630"), (800, "800")],
+        )
+        conn.execute(
+            f"UPDATE {table} SET label = CAST(value AS INTEGER) "
+            "WHERE value IN (250, 400, 630, 800)"
+        )
     conn.commit()
 
 

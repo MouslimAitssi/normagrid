@@ -26,14 +26,38 @@ CREATE TABLE IF NOT EXISTS tag (
     type  TEXT NOT NULL
 );
 
+-- Listes de reference utilisees dans les formulaires de saisie
+CREATE TABLE IF NOT EXISTS reference_charge_types (
+    value TEXT PRIMARY KEY
+);
+INSERT OR IGNORE INTO reference_charge_types (value) VALUES
+    ('U1000R2V 4G10'), ('U1000R2V 4G16'), ('U1000R2V 4G25'),
+    ('U1000R2V 4G35'), ('U1000R2V 4G50');
+
+CREATE TABLE IF NOT EXISTS reference_puissances_transfos_kva (
+    value REAL PRIMARY KEY,
+    label TEXT NOT NULL
+);
+INSERT OR IGNORE INTO reference_puissances_transfos_kva (value, label) VALUES
+    (250, '250'), (400, '400'), (630, '630'), (800, '800');
+
+CREATE TABLE IF NOT EXISTS reference_puissances_groupes_electrogenes_kva (
+    value REAL PRIMARY KEY,
+    label TEXT NOT NULL
+);
+INSERT OR IGNORE INTO reference_puissances_groupes_electrogenes_kva (value, label) VALUES
+    (250, '250'), (400, '400'), (630, '630'), (800, '800');
+
 -- Equipements
 CREATE TABLE IF NOT EXISTS tableaux (
     tag_id      TEXT PRIMARY KEY,
     site_id     TEXT NOT NULL,
+    amont_id    TEXT,
     type        TEXT,
     tension_v   REAL,
     FOREIGN KEY (tag_id)  REFERENCES tag(tag),
-    FOREIGN KEY (site_id) REFERENCES site(tag)
+    FOREIGN KEY (site_id) REFERENCES site(tag),
+    FOREIGN KEY (amont_id) REFERENCES tag(tag)
 );
 
 CREATE TABLE IF NOT EXISTS transfos (
@@ -90,6 +114,7 @@ CREATE TABLE IF NOT EXISTS charge (
     site_id          TEXT NOT NULL,
     amont_id         TEXT,
     type             TEXT,
+    puissance        REAL,
     protection_modele  TEXT,
     calibre_a          REAL,
     differentiel_ma    REAL,

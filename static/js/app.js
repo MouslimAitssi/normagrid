@@ -1462,6 +1462,9 @@ function redrawDiagram() {
   // A compact electrical drawing grid: symbols sit freely in the cells,
   // while the grid remains a drafting guide rather than a component frame.
   const CELL_SIZE = 80, NODE_W = CELL_SIZE, NODE_H = CELL_SIZE, MARGIN = 0;
+  // A component row followed by one link-only row: connections therefore
+  // occupy exactly one grid square vertically before the next component.
+  const LAYER_STRIDE = CELL_SIZE * 2;
 
   let maxRowWidth = 0;
   layerKeys.forEach((l) => {
@@ -1477,13 +1480,13 @@ function redrawDiagram() {
     rowNodes.forEach((n, i) => {
       positions[n.id] = {
         x: startX + i * CELL_SIZE,
-        y: MARGIN + l * CELL_SIZE,
+        y: MARGIN + l * LAYER_STRIDE,
       };
     });
   });
 
   const svgWidth = Math.max(maxRowWidth + MARGIN * 2, 300);
-  const svgHeight = MARGIN * 2 + layerKeys.length * CELL_SIZE;
+  const svgHeight = MARGIN * 2 + (layerKeys.length - 1) * LAYER_STRIDE + CELL_SIZE;
 
   const parts = [];
   parts.push(
@@ -2350,13 +2353,26 @@ function labelColumnFor(cfg) {
 }
 
 async function fetchOptions(refTable) {
+  // `tag` is an internal registry and can retain an orphan tag after an
+  // equipment deletion.  For an upstream selector, only offer components
+  // that still exist and can therefore appear in the synoptic.
+  if (refTable === "tag") {
+    const graph = await (await fetch("/api/graph")).json();
+    return graph.nodes
+      .map((node) => {
+        const label = (NODE_TYPE_STYLE[node.type] || {}).label || node.type;
+        return { value: node.id, text: `${node.id} (${label})` };
+      })
+      .sort((a, b) => a.text.localeCompare(b.text));
+  }
+
   const refCfg = SCHEMA[refTable];
   const rows = await Api.list(refTable);
   const labelCol = labelColumnFor(refCfg);
   const pkCol = refCfg.pk[0];
   return rows.map((r) => ({
     value: r[pkCol],
-    text: r[labelCol] && r[labelCol] !== r[pkCol] ? `${r[pkCol]} (${r[labelCol]})` : `${r[pkCol]}`,
+    text: r[labelCol] && String(r[labelCol]) !== String(r[pkCol]) ? `${r[pkCol]} (${r[labelCol]})` : `${r[pkCol]}`,
   }));
 }
 
@@ -2373,7 +2389,8 @@ async function buildFieldInputs(container, cfg, idPrefix, prefillData, disablePk
     wrap.appendChild(label);
 
     let input;
-    if (col.fk) {
+    const optionsTable = col.fk || col.options_table;
+    if (optionsTable) {
       input = document.createElement("select");
       input.id = `${idPrefix}${col.name}`;
       input.name = col.name;
@@ -2382,7 +2399,7 @@ async function buildFieldInputs(container, cfg, idPrefix, prefillData, disablePk
       emptyOpt.textContent = col.optional ? "-- aucun --" : "-- choisir --";
       input.appendChild(emptyOpt);
       try {
-        const options = await fetchOptions(col.fk);
+        const options = await fetchOptions(optionsTable);
         options.forEach((o) => {
           const opt = document.createElement("option");
           opt.value = o.value;
@@ -2476,6 +2493,7 @@ async function openEditEquipmentModal(tagId, type) {
 
 async function saveEditEquipment() {
   if (!EDIT_CONTEXT) return;
+  if (!document.getElementById("edit-equipment-form").reportValidity()) return;
   const { table, pkValues } = EDIT_CONTEXT;
   const cfg = SCHEMA[table];
   const errorEl = document.getElementById("edit-equipment-error");
@@ -2534,6 +2552,7 @@ async function openCreateEquipmentModal(table, context) {
 
 async function saveCreateEquipment() {
   if (!CREATE_CONTEXT) return;
+  if (!document.getElementById("create-equipment-form").reportValidity()) return;
   const { table, context } = CREATE_CONTEXT;
   const cfg = SCHEMA[table];
   const errorEl = document.getElementById("create-equipment-error");
@@ -2547,12 +2566,6 @@ async function saveCreateEquipment() {
 
   try {
     await Api.create(table, data);
-    // Les tableaux n'ont pas de colonne amont_id : l'amont de contexte se
-    // traduit par une ligne dans la table d'association tableau_jointure.
-    if (table === "tableaux" && context.amontTag) {
-      const pkCol = cfg.pk[0];
-      await Api.create("tableau_jointure", { tableau_tag: data[pkCol], amont_tag: context.amontTag });
-    }
     closeModal();
     await loadEquipementsView();
   } catch (e) {
