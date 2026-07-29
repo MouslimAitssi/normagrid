@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NormaGrid - {{ version }}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <h1>NormaGrid <span class="version-badge">{{ version }}</span></h1>
+    <span id="active-project-label" class="active-project-label"></span>
+  </div>
+  <div class="file-menu">
+    <button class="file-menu-btn" id="btn-new-project" type="button">Nouveau</button>
+    <button class="file-menu-btn" id="btn-open-project" type="button">Ouvrir</button>
+    <button class="file-menu-btn" id="btn-save-as-project" type="button">Enregistrer sous</button>
+    <button class="file-menu-btn" id="btn-close-project" type="button">Fermer</button>
+    <div class="file-menu-dropdown">
+      <button class="file-menu-btn" id="btn-import-toggle" type="button">Importer &#9662;</button>
+      <div class="dropdown-panel" id="import-dropdown">
+        <button class="dropdown-item" data-import="normagrid" type="button">Ancienne version de NormaGrid...</button>
+        <button class="dropdown-item" data-import="excel" type="button">Fichier Excel...</button>
+        <button class="dropdown-item" data-import="caneco" type="button">Note de calcul Caneco...</button>
+        <button class="dropdown-item" data-import="caneco-convert" type="button">Convertir table de preparation Caneco...</button>
+        <button class="dropdown-item" data-import="etap" type="button">Note de calcul Etap...</button>
+      </div>
+    </div>
+    <div class="file-menu-dropdown">
+      <button class="file-menu-btn" id="btn-export-toggle" type="button">Exporter &#9662;</button>
+      <div class="dropdown-panel" id="export-dropdown">
+        <button class="dropdown-item" data-export="accdb" type="button">Base de donnees Access (.accdb)...</button>
+        <button class="dropdown-item" data-export="sql" type="button">Script SQL universel (.sql)...</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ================= ECRAN : AUCUN PROJET OUVERT ================= -->
+<div id="view-welcome" class="welcome-screen" style="display:none;">
+  <div class="welcome-card">
+    <h2>Aucun projet ouvert</h2>
+    <p>Creez un nouveau projet, ouvrez un projet existant, ou importez une ancienne version de NormaGrid depuis le menu ci-dessus.</p>
+    <div class="welcome-actions">
+      <button class="primary" id="welcome-new-btn" type="button">Nouveau projet</button>
+      <button class="secondary" id="welcome-open-btn" type="button">Ouvrir un projet</button>
+    </div>
+  </div>
+</div>
+
+<nav class="top-tabs" id="top-tabs" style="display:none;">
+  <button class="top-tab-btn active" data-view="equipements">Liste des equipements</button>
+  <button class="top-tab-btn" data-view="bilan">Bilan de puissance</button>
+  <button class="top-tab-btn" data-view="cablesched">Carnet de cables</button>
+  <button class="top-tab-btn" data-view="synoptique">Synoptique</button>
+  <button class="top-tab-btn" data-view="saisie">Saisie des donnees</button>
+</nav>
+
+<!-- ================= VUE : LISTE DES EQUIPEMENTS ================= -->
+<div id="view-equipements" class="top-view" style="display:none;">
+  <div class="three-pane">
+    <aside class="tree-pane">
+      <div id="tree-root" class="tree-root">Chargement...</div>
+    </aside>
+    <section class="list-pane">
+      <div class="list-toolbar">
+        <h3 id="list-scope-title" style="margin:0;">Tous les equipements</h3>
+        <button id="tree-refresh" class="primary" type="button">Rafraichir</button>
+      </div>
+      <p class="hint">Double-cliquez sur une ligne pour modifier un equipement. Glissez un type depuis la palette de droite vers un site ou un equipement dans l'arbre pour en ajouter un nouveau.</p>
+      <div id="equip-table-wrap"></div>
+    </section>
+    <aside class="palette-pane">
+      <h3>Ajouter par glisser-deposer</h3>
+      <p class="field-hint">Deposez sur un site ou un equipement de l'arbre a gauche. L'amont / le site sera renseigne automatiquement.</p>
+      <div id="palette-list" class="palette-list"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- ================= VUE : BILAN DE PUISSANCE ================= -->
+<div id="view-bilan" class="top-view" style="display:none;">
+  <div class="content" style="max-width:none;">
+    <section class="table-card">
+      <div class="diagram-toolbar">
+        <h3 style="margin:0;">Bilan de puissance</h3>
+        <div class="diagram-toolbar-actions">
+          <button id="bilan-export-open" class="secondary" type="button">Exporter vers Excel</button>
+          <button id="bilan-refresh" class="primary" type="button">Rafraichir</button>
+        </div>
+      </div>
+
+      <div class="field" style="max-width:320px;">
+        <label for="bilan-switchgear-filter">Filtrer par Switchgear / MCC</label>
+        <select id="bilan-switchgear-filter">
+          <option value="">-- tous --</option>
+        </select>
+      </div>
+
+      <div id="bilan-kpi-cards" class="bilan-kpi-row"></div>
+
+      <p class="field-hint">
+        Puissance active unitaire = Puissance installee &times; Rendement. Puissance apparente =
+        active / Cos &phi;. Puissance reactive = active &times; tan(acos(Cos &phi;)). Puissances
+        foisonnees = unitaire &times; Nombre &times; K.Util &times; K.Simul.
+      </p>
+      <div id="bilan-table-wrap" class="charge-full-table-scroll"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= VUE : CARNET DE CABLES ================= -->
+<div id="view-cablesched" class="top-view" style="display:none;">
+  <div class="content" style="max-width:none;">
+    <section class="table-card">
+      <div class="diagram-toolbar">
+        <h3 style="margin:0;">Carnet de cables</h3>
+        <button id="cable-schedule-export-open" class="primary" type="button">Exporter vers Excel</button>
+      </div>
+      <p class="field-hint">Saisissez un texte dans une case pour filtrer cette colonne.</p>
+      <div id="cable-schedule-table-wrap" class="caneco-preview-table-wrap" style="max-height:70vh;"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= VUE : SYNOPTIQUE ================= -->
+<div id="view-synoptique" class="top-view" style="display:none;">
+  <div class="synoptique-layout">
+    <aside class="tableaux-filter-pane">
+      <h3>Equipements affiches</h3>
+      <p class="field-hint">Decochez un equipement pour le masquer, lui et tous ses avals.</p>
+      <div class="synoptique-side-toolbar">
+        <div class="zoom-controls">
+          <button id="diagram-zoom-out" class="secondary" type="button" title="Dezoomer">&minus;</button>
+          <button id="diagram-zoom-reset" class="secondary" type="button" title="Reinitialiser le zoom">100%</button>
+          <button id="diagram-zoom-in" class="secondary" type="button" title="Zoomer">+</button>
+        </div>
+        <button id="diagram-refresh" class="primary" type="button">Rafraichir</button>
+      </div>
+      <div class="tableaux-filter-actions">
+        <button id="tableaux-filter-all" class="secondary" type="button">Tout cocher</button>
+        <button id="tableaux-filter-none" class="secondary" type="button">Tout decocher</button>
+      </div>
+      <div id="tableaux-filter-list" class="tableaux-filter-list"></div>
+    </aside>
+    <section class="table-card synoptique-main">
+      <div class="diagram-toolbar">
+        <h3 style="margin:0;">Synoptique - vue d'ensemble du reseau</h3>
+      </div>
+      <div id="diagram-legend" class="diagram-legend"></div>
+      <div id="diagram-svg-wrap" class="diagram-svg-wrap"></div>
+    </section>
+  </div>
+</div>
+
+<!-- ================= VUE : SAISIE DES DONNEES (CRUD par table) ================= -->
+<div id="view-saisie" class="top-view" style="display:none;">
+  <div class="layout">
+    <nav id="tabs" class="tabs"></nav>
+    <main class="content">
+      <div class="panel-header">
+        <h2 id="panel-title">-</h2>
+        <p id="panel-hint" class="hint"></p>
+      </div>
+      <section class="form-card">
+        <h3>Ajouter une entree</h3>
+        <form id="entry-form"></form>
+        <p id="form-error" class="error"></p>
+      </section>
+      <section class="table-card">
+        <h3>Entrees existantes</h3>
+        <div id="table-wrap"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ================= MODALES ================= -->
+<div id="modal-overlay" class="modal-overlay" style="display:none;">
+
+  <div class="modal-box" id="modal-new-project" style="display:none;">
+    <h3>Nouveau projet</h3>
+    <div class="field">
+      <label for="new-project-name">Nom du projet</label>
+      <input type="text" id="new-project-name" placeholder="ex : Chantier Laayoune">
+    </div>
+    <div class="field">
+      <label for="new-project-folder">Dossier de destination</label>
+      <div class="field-with-button">
+        <input type="text" id="new-project-folder" required>
+        <button class="secondary browse-btn" id="new-project-folder-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint" id="new-project-folder-hint">Un navigateur web ne peut pas parcourir votre disque : saisissez un chemin complet.</p>
+    </div>
+    <p class="error" id="new-project-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="new-project-cancel" type="button">Annuler</button>
+      <button class="primary" id="new-project-confirm" type="button">Creer</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-open-project" style="display:none;">
+    <h3>Ouvrir un projet</h3>
+    <div id="open-project-list" class="project-list"></div>
+    <div class="field" style="margin-top:0.9rem;">
+      <label for="open-project-path">Chemin complet d'un fichier .db</label>
+      <div class="field-with-button">
+        <input type="text" id="open-project-path" placeholder="ex : C:\Projets\NormaGrid\Chantier.db">
+        <button class="secondary browse-btn" id="open-project-path-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint" id="open-project-path-hint">Un navigateur web ne peut pas parcourir votre disque directement : collez le chemin complet du fichier a ouvrir.</p>
+    </div>
+    <p class="error" id="open-project-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="open-project-cancel" type="button">Annuler</button>
+      <button class="primary" id="open-project-path-confirm" type="button">Ouvrir ce chemin</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-save-as-project" style="display:none;">
+    <h3>Enregistrer sous</h3>
+    <div class="field">
+      <label for="save-as-name">Nom du nouveau projet</label>
+      <input type="text" id="save-as-name" placeholder="ex : Chantier Laayoune (copie)">
+    </div>
+    <div class="field">
+      <label for="save-as-folder">Dossier de destination</label>
+      <div class="field-with-button">
+        <input type="text" id="save-as-folder" required>
+        <button class="secondary browse-btn" id="save-as-folder-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint">Le contenu du projet actuellement ouvert sera copie dans ce nouveau fichier, qui devient le projet actif.</p>
+    </div>
+    <p class="error" id="save-as-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="save-as-cancel" type="button">Annuler</button>
+      <button class="primary" id="save-as-confirm" type="button">Enregistrer</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-import-normagrid" style="display:none;">
+    <h3>Importer une ancienne version de NormaGrid</h3>
+    <div class="field">
+      <label for="import-file">Fichier .db</label>
+      <input type="file" id="import-file" accept=".db">
+    </div>
+    <div class="field">
+      <label for="import-project-name">Nom du projet importe</label>
+      <input type="text" id="import-project-name" placeholder="ex : Chantier Laayoune (import)">
+    </div>
+    <div class="field">
+      <label for="import-project-folder">Dossier de destination (optionnel)</label>
+      <div class="field-with-button">
+        <input type="text" id="import-project-folder" placeholder="Par defaut : dossier projects/ de l'application">
+        <button class="secondary browse-btn" id="import-project-folder-browse" type="button">Parcourir...</button>
+      </div>
+    </div>
+    <p class="error" id="import-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="import-cancel" type="button">Annuler</button>
+      <button class="primary" id="import-confirm" type="button">Importer</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-export-db" style="display:none;">
+    <h3 id="export-db-title">Exporter la base de donnees</h3>
+    <p class="field-hint" id="export-db-hint"></p>
+    <div class="field">
+      <label for="export-db-filename">Nom du fichier</label>
+      <input type="text" id="export-db-filename">
+    </div>
+    <div class="field">
+      <label for="export-db-folder">Dossier de destination</label>
+      <div class="field-with-button">
+        <input type="text" id="export-db-folder" required>
+        <button class="secondary browse-btn" id="export-db-folder-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint" id="export-db-folder-hint">Un navigateur web ne peut pas parcourir votre disque : saisissez un chemin complet.</p>
+    </div>
+    <p class="error" id="export-db-error"></p>
+    <p id="export-db-warnings" style="display:none; color:var(--danger); font-size:0.85rem;"></p>
+    <p id="export-db-success" style="display:none; color:var(--teal); font-weight:600;"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="export-db-cancel" type="button">Annuler</button>
+      <button class="primary" id="export-db-confirm" type="button">Exporter</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-import-excel" style="display:none;">
+    <h3>Importer des charges depuis un fichier Excel</h3>
+    <div id="excel-no-reseau" class="field-hint" style="display:none; color:var(--danger); margin-bottom:0.8rem;">
+      Aucun reseau HT n'existe dans ce projet. Creez-en un dans "Saisie des donnees" avant de pouvoir importer.
+    </div>
+    <div class="field">
+      <label for="excel-file">Fichier Excel (.xlsx)</label>
+      <input type="file" id="excel-file" accept=".xlsx,.xls">
+    </div>
+    <p class="field-hint">La premiere ligne du fichier doit contenir les en-tetes de colonnes.</p>
+    <p class="error" id="excel-import-error"></p>
+    <div id="excel-import-progress" style="display:none;" class="field-hint">Analyse en cours...</div>
+    <div class="modal-actions">
+      <button class="secondary" id="excel-import-cancel" type="button">Fermer</button>
+      <button class="primary" id="excel-import-analyze" type="button">Analyser</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-xwide" id="modal-excel-mapping" style="display:none;">
+    <h3>Correspondance des champs</h3>
+    <div class="field">
+      <label for="excel-site-select">Reseau HT de rattachement</label>
+      <select id="excel-site-select"></select>
+      <p class="field-hint">Le site de destination des charges importees sera celui de ce reseau HT.</p>
+    </div>
+    <p class="field-hint">
+      Associez chaque champ de la table Charge a une colonne du fichier importe (ou laissez "-- ignorer --").
+      Le champ <strong>Tag</strong> est obligatoire.
+    </p>
+    <div id="excel-mapping-table-wrap" class="caneco-preview-table-wrap" style="max-height:45vh;"></div>
+
+    <h4 style="margin:1rem 0 0.4rem 0; color:var(--navy);">Apercu du fichier (premieres lignes)</h4>
+    <div id="excel-preview-table-wrap" class="caneco-preview-table-wrap" style="max-height:20vh;"></div>
+
+    <p class="error" id="excel-mapping-error"></p>
+    <div id="excel-mapping-progress" style="display:none;" class="field-hint">Import en cours...</div>
+    <div id="excel-import-report" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="excel-mapping-cancel" type="button">Annuler</button>
+      <button class="primary" id="excel-mapping-confirm" type="button">Importer</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-caneco-staging-upload" style="display:none;">
+    <h3>Importer une note de calcul Caneco</h3>
+    <p class="field-hint">
+      Cette etape extrait tous les circuits du fichier pour revue et correction, sans creer
+      aucun equipement. La conversion en tableaux/transfos/cables/charges se fera ensuite,
+      separement.
+    </p>
+    <div class="field">
+      <label for="caneco-staging-file">Fichier PDF (note de calcul Caneco)</label>
+      <input type="file" id="caneco-staging-file" accept=".pdf">
+    </div>
+    <p class="error" id="caneco-staging-upload-error"></p>
+    <div id="caneco-staging-upload-progress" style="display:none;" class="field-hint">Analyse en cours (peut prendre un instant pour un gros fichier)...</div>
+    <div class="modal-actions">
+      <button class="secondary" id="caneco-staging-upload-cancel" type="button">Fermer</button>
+      <button class="primary" id="caneco-staging-upload-analyze" type="button">Analyser</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-import-caneco" style="display:none;">
+    <h3>Importer une note de calcul Caneco</h3>
+
+    <div id="caneco-no-reseau" class="field-hint" style="display:none; color:var(--danger); margin-bottom:0.8rem;">
+      Aucun reseau HT n'existe dans ce projet. Creez-en un dans "Saisie des donnees" avant de pouvoir importer.
+    </div>
+
+    <div class="field" id="caneco-reseau-field">
+      <label for="caneco-reseau-select">Reseau HT de rattachement</label>
+      <select id="caneco-reseau-select"></select>
+      <p class="field-hint">Les tableaux racines du fichier importe seront rattaches a ce reseau HT.</p>
+    </div>
+
+    <div class="field">
+      <label for="caneco-file">Fichier PDF (note de calcul Caneco)</label>
+      <input type="file" id="caneco-file" accept=".pdf">
+    </div>
+
+    <div class="field">
+      <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal;">
+        <input type="checkbox" id="caneco-include-charges" style="width:auto;">
+        Importer aussi les charges (circuits terminaux : eclairage, prises, moteurs...)
+      </label>
+      <p class="field-hint">Non cochee par defaut : seule la structure des tableaux/transfos/groupes est importee.</p>
+    </div>
+
+    <p class="error" id="caneco-error"></p>
+    <div id="caneco-progress" style="display:none;" class="field-hint">Analyse en cours (peut prendre une minute pour un gros fichier)...</div>
+
+    <div class="modal-actions">
+      <button class="secondary" id="caneco-cancel" type="button">Fermer</button>
+      <button class="primary" id="caneco-confirm" type="button">Analyser</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-bilan-export" style="display:none;">
+    <h3>Exporter le bilan de puissance</h3>
+    <p class="field-hint">Une feuille sera creee par Switchgear / MCC (les charges sans valeur vont dans "Non affecte").</p>
+    <div class="field">
+      <label for="bilan-export-filename">Nom du fichier</label>
+      <input type="text" id="bilan-export-filename" value="Bilan_de_puissance.xlsx">
+    </div>
+    <div class="field">
+      <label for="bilan-export-folder">Dossier de destination</label>
+      <div class="field-with-button">
+        <input type="text" id="bilan-export-folder" required>
+        <button class="secondary browse-btn" id="bilan-export-folder-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint" id="bilan-export-folder-hint">Un navigateur web ne peut pas parcourir votre disque : saisissez un chemin complet.</p>
+    </div>
+    <p class="error" id="bilan-export-error"></p>
+    <p id="bilan-export-success" style="display:none; color:var(--teal); font-weight:600;"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="bilan-export-cancel" type="button">Annuler</button>
+      <button class="primary" id="bilan-export-confirm" type="button">Exporter</button>
+    </div>
+  </div>
+
+  <div class="modal-box" id="modal-cable-schedule-export" style="display:none;">
+    <h3>Exporter le carnet de cables</h3>
+    <div class="field">
+      <label for="cable-export-filename">Nom du fichier</label>
+      <input type="text" id="cable-export-filename" value="Carnet_de_cables.xlsx">
+    </div>
+    <div class="field">
+      <label for="cable-export-folder">Dossier de destination</label>
+      <div class="field-with-button">
+        <input type="text" id="cable-export-folder" required>
+        <button class="secondary browse-btn" id="cable-export-folder-browse" type="button">Parcourir...</button>
+      </div>
+      <p class="field-hint" id="cable-export-folder-hint">Un navigateur web ne peut pas parcourir votre disque : saisissez un chemin complet.</p>
+    </div>
+    <p class="error" id="cable-export-error"></p>
+    <p id="cable-export-success" style="display:none; color:var(--teal); font-weight:600;"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="cable-export-cancel" type="button">Annuler</button>
+      <button class="primary" id="cable-export-confirm" type="button">Exporter</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-xwide" id="modal-caneco-staging" style="display:none;">
+    <h3>Import Caneco - table de preparation</h3>
+    <p class="field-hint">
+      Verifiez et corrigez librement chaque champ ci-dessous avant de charger dans la table
+      "Import Caneco" du projet. Cette etape ne cree encore aucun equipement : la conversion en
+      tableaux/transfos/cables/charges se fera dans une etape separee ulterieure.
+    </p>
+    <div id="caneco-staging-summary" class="field-hint" style="font-weight:600;"></div>
+    <div id="caneco-staging-table-wrap" class="caneco-preview-table-wrap" style="max-height:55vh;"></div>
+    <p class="error" id="caneco-staging-error"></p>
+    <div id="caneco-staging-progress" style="display:none;" class="field-hint">Chargement en cours...</div>
+    <div id="caneco-staging-report" style="display:none; font-weight:600; color:var(--teal);"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="caneco-staging-cancel" type="button">Annuler</button>
+      <button class="primary" id="caneco-staging-confirm" type="button">Charger dans la table</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-xwide" id="modal-caneco-preview" style="display:none;">
+    <h3>Verifier les amonts avant import</h3>
+    <p class="field-hint">
+      Les charges (circuits terminaux) ne sont jamais importees. Un tableau peut avoir jusqu'a 2 amonts
+      (Normal + Secours) : corrigez-les ici si besoin avant de confirmer.
+    </p>
+    <div id="caneco-preview-summary" class="field-hint" style="margin:0.4rem 0 0.8rem 0;"></div>
+    <div id="caneco-preview-table-wrap" class="caneco-preview-table-wrap"></div>
+    <p class="error" id="caneco-preview-error"></p>
+    <div id="caneco-confirm-progress" style="display:none;" class="field-hint">Import en cours...</div>
+    <div id="caneco-final-report" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="secondary" id="caneco-preview-cancel" type="button">Annuler</button>
+      <button class="primary" id="caneco-preview-confirm" type="button">Confirmer l'import</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-xwide" id="modal-caneco-convert" style="display:none;">
+    <h3>Convertir la table de preparation Caneco en equipements</h3>
+    <p class="field-hint">
+      Cree les tableaux/transformateurs/groupes electrogenes/cables (et optionnellement les
+      charges) a partir des lignes de la table de preparation "Import Caneco" pas encore
+      converties. Verifiez et corrigez les amonts proposes ci-dessous avant de confirmer.
+    </p>
+
+    <div id="caneco-convert-empty" class="field-hint" style="display:none; color:var(--danger);">
+      Aucune ligne a convertir : importez d'abord une note de calcul Caneco (menu Importer), ou
+      toutes les lignes existantes ont deja ete converties.
+    </div>
+
+    <div id="caneco-convert-no-reseau" class="field-hint" style="display:none; color:var(--danger); margin-bottom:0.8rem;">
+      Aucun reseau HT n'existe dans ce projet. Creez-en un dans "Saisie des donnees" avant de pouvoir convertir.
+    </div>
+
+    <div id="caneco-convert-body">
+      <div class="field" id="caneco-convert-reseau-field">
+        <label for="caneco-convert-reseau-select">Reseau HT de rattachement</label>
+        <select id="caneco-convert-reseau-select"></select>
+        <p class="field-hint">Les tableaux racines seront rattaches a ce reseau HT.</p>
+      </div>
+
+      <div class="field">
+        <label style="display:flex; align-items:center; gap:0.5rem; font-weight:normal;">
+          <input type="checkbox" id="caneco-convert-include-charges" style="width:auto;">
+          Importer aussi les charges (circuits terminaux : eclairage, prises, moteurs...)
+        </label>
+        <p class="field-hint">Non cochee par defaut : seule la structure des tableaux/transfos/groupes est creee.</p>
+      </div>
+
+      <div id="caneco-convert-summary" class="field-hint" style="font-weight:600;"></div>
+      <div id="caneco-convert-table-wrap" class="caneco-preview-table-wrap"></div>
+    </div>
+
+    <p class="error" id="caneco-convert-error"></p>
+    <div id="caneco-convert-progress" style="display:none;" class="field-hint">Conversion en cours...</div>
+    <div id="caneco-convert-report" style="display:none;"></div>
+
+    <div class="modal-actions">
+      <button class="secondary" id="caneco-convert-cancel" type="button">Fermer</button>
+      <button class="primary" id="caneco-convert-confirm" type="button">Convertir</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-wide" id="modal-edit-equipment" style="display:none;">
+    <h3 id="edit-equipment-title">Modifier l'equipement</h3>
+    <form id="edit-equipment-form"></form>
+    <p class="error" id="edit-equipment-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="edit-equipment-cancel" type="button">Annuler</button>
+      <button class="primary" id="edit-equipment-save" type="button">Sauvegarder</button>
+    </div>
+  </div>
+
+  <div class="modal-box modal-box-wide" id="modal-create-equipment" style="display:none;">
+    <h3 id="create-equipment-title">Ajouter un equipement</h3>
+    <p class="field-hint" id="create-equipment-context"></p>
+    <form id="create-equipment-form"></form>
+    <p class="error" id="create-equipment-error"></p>
+    <div class="modal-actions">
+      <button class="secondary" id="create-equipment-cancel" type="button">Annuler</button>
+      <button class="primary" id="create-equipment-save" type="button">Creer</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='js/api.js') }}?v={{ version }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+# Python virtual environments and interpreter artefacts
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test, coverage, and type-checking output
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+test-results/
+playwright-report/
+blob-report/
+
+# Local IDE and operating-system settings
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local configuration and logs
+.env
+.env.*
+*.log
+
+# Runtime project data: SQLite files and the local "current project" state
+projects/*.db
+database/current_project.json
+database/projects_registry.json
+
+# SQLite transient files
+*.db-journal
+*.db-wal
+*.db-shm
