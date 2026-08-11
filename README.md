@@ -10,6 +10,12 @@ independant** (dossier `projects/`), a la maniere d'un fichier bureautique
 Le fichier `render.yaml` permet de publier l'application depuis un depot GitHub.
 Chaque `git push` sur la branche connectee declenche un redeploiement automatique.
 
+Pour une demonstration temporaire sans frais, utilisez `render.free.yaml` comme
+Blueprint a la place. Cette version est gratuite, mais le service s'endort apres
+15 minutes sans trafic et toutes les donnees SQLite sont perdues au redemarrage,
+a l'endormissement ou au prochain deploiement. Elle ne convient donc pas a la
+saisie reelle de donnees.
+
 1. Creez un depot GitHub et poussez le code (les fichiers `.db` restent ignores).
 2. Dans Render : **New > Blueprint**, connectez le depot puis selectionnez
    `render.yaml`.

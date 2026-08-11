@@ -1,0 +1,12 @@
+# Configuration de demonstration gratuite Render.
+# ATTENTION : sans disque persistant, SQLite et tous les projets sont effaces
+# apres une mise en veille, un redemarrage ou un redeploiement.
+services:
+  - type: web
+    name: normagrid-free
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --bind 0.0.0.0:$PORT app:app
+    autoDeployTrigger: commit
+    healthCheckPath: /health
