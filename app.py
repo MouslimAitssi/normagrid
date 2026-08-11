@@ -6,6 +6,9 @@ from backend.routes.api import api
 from backend.routes.projects import projects_bp
 
 APP_VERSION = "V1.44"
+# Render renseigne cet identifiant a chaque commit deployee. Il evite que le
+# navigateur reutilise un ancien CSS/JS apres un redeploiement.
+ASSET_VERSION = os.environ.get("RENDER_GIT_COMMIT", APP_VERSION)
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # evite que le navigateur garde en cache un ancien JS/CSS
@@ -25,7 +28,11 @@ def handle_no_active_project(e):
 
 @app.get("/")
 def index():
-    return render_template("index.html", version=APP_VERSION)
+    return render_template(
+        "index.html",
+        version=APP_VERSION,
+        asset_version=ASSET_VERSION,
+    )
 
 
 @app.get("/health")
