@@ -5,6 +5,32 @@ vanilla servi par templates/static). Chaque **projet est un fichier .db
 independant** (dossier `projects/`), a la maniere d'un fichier bureautique
 (Nouveau / Ouvrir / Fermer / Importer).
 
+## Publication sur Render (SQLite persistant)
+
+Le fichier `render.yaml` permet de publier l'application depuis un depot GitHub.
+Chaque `git push` sur la branche connectee declenche un redeploiement automatique.
+
+1. Creez un depot GitHub et poussez le code (les fichiers `.db` restent ignores).
+2. Dans Render : **New > Blueprint**, connectez le depot puis selectionnez
+   `render.yaml`.
+3. Lancez le deploiement. Le service utilise le plan `starter`, necessaire au
+   disque persistant, et Render fournit l'URL publique HTTPS.
+
+Sur Render, `NORMAGRID_DATA_DIR=/var/data` place les projets SQLite et leur
+registre sur le disque `normagrid-data`. Ils ne sont donc pas effaces lors d'un
+redeploiement. Le service est volontairement limite a un seul worker, car SQLite
+et le fichier de projet actif ne sont pas concus pour plusieurs instances.
+
+Le premier deploiement cree un projet `Default` vide. Pour reprendre les donnees
+locales, utilisez dans l'application publiee **Importer > Ancienne version de
+NormaGrid** et envoyez votre fichier, par exemple `projects/test.db`. N'ajoutez
+pas ce fichier `.db` au depot Git : les donnees en ligne resteraient alors
+ecrasees ou exposees dans l'historique Git.
+
+> Cette configuration ne contient volontairement **aucune authentification** :
+> toute personne ayant l'URL peut consulter, importer, creer, modifier et
+> supprimer les donnees. N'y mettez aucune information confidentielle.
+
 ## Structure
 
 ```

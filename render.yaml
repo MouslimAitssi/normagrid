@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: normagrid
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --workers 1 --bind 0.0.0.0:$PORT app:app
+    autoDeployTrigger: commit
+    healthCheckPath: /health
+    envVars:
+      - key: NORMAGRID_DATA_DIR
+        value: /var/data
+    disk:
+      name: normagrid-data
+      mountPath: /var/data
+      sizeGB: 1

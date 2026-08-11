@@ -1261,6 +1261,10 @@ function escapeXml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function diagramValue(value) {
+  return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
 function computeLayers(nodes, edges) {
   const children = {};
   const inDeg = {};
@@ -1451,14 +1455,6 @@ function redrawDiagram() {
     return;
   }
 
-  const layer = computeLayers(nodes, edges);
-  const layers = {};
-  nodes.forEach((n) => {
-    const l = layer[n.id];
-    (layers[l] = layers[l] || []).push(n);
-  });
-  const layerKeys = Object.keys(layers).map(Number).sort((a, b) => a - b);
-
   // A compact electrical drawing grid: symbols sit freely in the cells,
   // while the grid remains a drafting guide rather than a component frame.
   const CELL_SIZE = 80, NODE_W = CELL_SIZE, NODE_H = CELL_SIZE, MARGIN = 0;
@@ -1466,27 +1462,77 @@ function redrawDiagram() {
   // occupy exactly one grid square vertically before the next component.
   const LAYER_STRIDE = CELL_SIZE * 2;
 
-  let maxRowWidth = 0;
-  layerKeys.forEach((l) => {
-    const w = layers[l].length * CELL_SIZE;
-    maxRowWidth = Math.max(maxRowWidth, w);
+  const layer = computeLayers(nodes, edges);
+  const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const outgoingBySource = {};
+  const incomingCount = Object.fromEntries(nodes.map((n) => [n.id, 0]));
+  edges.forEach((edge) => {
+    (outgoingBySource[edge.from] = outgoingBySource[edge.from] || []).push(edge);
+    if (edge.to in incomingCount) incomingCount[edge.to] += 1;
   });
+
+  // A node's span is the number of grid columns needed by its descendants.
+  // This lets each switchboard reserve an independent space for its own
+  // downstream branch, rather than sharing a global row layout with another
+  // switchboard.
+  const spanCache = {};
+  function nodeSpan(nodeId, visiting = new Set()) {
+    if (spanCache[nodeId]) return spanCache[nodeId];
+    if (visiting.has(nodeId)) return 1; // safeguard for an accidental cycle
+    visiting.add(nodeId);
+    const children = (outgoingBySource[nodeId] || []).map((edge) => edge.to);
+    const span = children.length
+      ? children.reduce((total, childId) => total + nodeSpan(childId, new Set(visiting)), 0)
+      : 1;
+    spanCache[nodeId] = Math.max(1, span);
+    return spanCache[nodeId];
+  }
 
   const positions = {};
-  layerKeys.forEach((l) => {
-    const rowNodes = layers[l];
-    const rowWidth = rowNodes.length * CELL_SIZE;
-    const startX = MARGIN + (maxRowWidth - rowWidth) / 2;
-    rowNodes.forEach((n, i) => {
-      positions[n.id] = {
-        x: startX + i * CELL_SIZE,
-        y: MARGIN + l * LAYER_STRIDE,
-      };
+  const placed = new Set();
+  function placeSubtree(nodeId, startColumn) {
+    if (placed.has(nodeId)) return;
+    const node = nodeById[nodeId];
+    if (!node) return;
+    const span = nodeSpan(nodeId);
+    const width = node.type === "tableaux" ? span * CELL_SIZE : CELL_SIZE;
+    positions[nodeId] = {
+      x: node.type === "tableaux"
+        ? MARGIN + startColumn * CELL_SIZE
+        : MARGIN + startColumn * CELL_SIZE + (span * CELL_SIZE - CELL_SIZE) / 2,
+      y: MARGIN + layer[nodeId] * LAYER_STRIDE,
+      width,
+    };
+    placed.add(nodeId);
+
+    let childColumn = startColumn;
+    (outgoingBySource[nodeId] || []).forEach((edge) => {
+      placeSubtree(edge.to, childColumn);
+      childColumn += nodeSpan(edge.to);
     });
+  }
+
+  const roots = nodes.filter((node) => incomingCount[node.id] === 0);
+  let nextColumn = 0;
+  roots.forEach((root) => {
+    placeSubtree(root.id, nextColumn);
+    nextColumn += nodeSpan(root.id) + 1; // one empty column between independent branches
+  });
+  // Keep disconnected or cyclic nodes visible as independent branches.
+  nodes.forEach((node) => {
+    if (!placed.has(node.id)) {
+      placeSubtree(node.id, nextColumn);
+      nextColumn += nodeSpan(node.id) + 1;
+    }
   });
 
-  const svgWidth = Math.max(maxRowWidth + MARGIN * 2, 300);
-  const svgHeight = MARGIN * 2 + (layerKeys.length - 1) * LAYER_STRIDE + CELL_SIZE;
+  const maxLayer = Math.max(0, ...Object.values(layer));
+  // Reserve grid space for the labels drawn to the right of each symbol.
+  // Without this gutter, labels belonging to the rightmost branch are clipped
+  // by the SVG viewBox.
+  const INFO_GUTTER = 220;
+  const svgWidth = Math.max((nextColumn - 1) * CELL_SIZE + MARGIN * 2 + INFO_GUTTER, 300);
+  const svgHeight = MARGIN * 2 + maxLayer * LAYER_STRIDE + CELL_SIZE;
 
   const parts = [];
   parts.push(
@@ -1500,11 +1546,12 @@ function redrawDiagram() {
   edges.forEach((e) => {
     const p1 = positions[e.from], p2 = positions[e.to];
     if (!p1 || !p2) return;
-    const x1 = p1.x + NODE_W / 2, y1 = p1.y + NODE_H;
-    const x2 = p2.x + NODE_W / 2, y2 = p2.y;
-    const midY = (y1 + y2) / 2;
+    // Subtrees allocate matching columns for each parent/child pair, so an
+    // edge can always be drawn as one vertical line.
+    const x = p2.x + p2.width / 2;
+    const y1 = p1.y + NODE_H, y2 = p2.y;
     parts.push(
-      `<path d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" ` +
+      `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" ` +
       'stroke="#4B5563" stroke-width="1.6" fill="none" />'
     );
   });
@@ -1514,15 +1561,22 @@ function redrawDiagram() {
     if (!p) return;
     const style = NODE_TYPE_STYLE[n.type] || { color: "#64748B", label: n.type };
     const detail = n.detail !== null && n.detail !== undefined && n.detail !== "" ? String(n.detail) : "";
+    const data = n.data || {};
 
     if (n.type === "reseau_ht") {
-      const box = 46, x = p.x + (NODE_W - box) / 2, y = p.y + (NODE_H - box) / 2;
+      const box = 46, x = p.x + (NODE_W - box) / 2, y = p.y + NODE_H - box - 6;
+      const labelX = p.x + NODE_W + 8;
       parts.push(`
         <g>
           <title>${escapeXml(`${style.label}: ${n.id}`)}</title>
           <rect x="${x}" y="${y}" width="${box}" height="${box}" fill="#FFFFFF" stroke="${style.color}" stroke-width="3"/>
           <line x1="${x + 3}" y1="${y + 3}" x2="${x + box - 3}" y2="${y + box - 3}" stroke="${style.color}" stroke-width="3"/>
           <line x1="${x + box - 3}" y1="${y + 3}" x2="${x + 3}" y2="${y + box - 3}" stroke="${style.color}" stroke-width="3"/>
+          <text x="${labelX}" y="${p.y + 16}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+          <text x="${labelX}" y="${p.y + 29}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">Pcc max : ${escapeXml(diagramValue(data.pcc_max_mva))}</text>
+          <text x="${labelX}" y="${p.y + 41}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">X/R max : ${escapeXml(diagramValue(data.x_r_max))}</text>
+          <text x="${labelX}" y="${p.y + 53}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">Pcc min : ${escapeXml(diagramValue(data.pcc_min_mva))}</text>
+          <text x="${labelX}" y="${p.y + 65}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">X/R min : ${escapeXml(diagramValue(data.x_r_min))}</text>
         </g>
       `);
       return;
@@ -1538,6 +1592,8 @@ function redrawDiagram() {
           <rect x="${cx - term / 2}" y="${p.y - 1}" width="${term}" height="${term}" fill="${style.color}"/>
           <rect x="${cx - term / 2}" y="${p.y + NODE_H - term + 1}" width="${term}" height="${term}" fill="${style.color}"/>
           <rect x="${cx - barW / 2}" y="${p.y + NODE_H / 2 - barH / 2}" width="${barW}" height="${barH}" fill="${style.color}"/>
+          <text x="${cx + 12}" y="${p.y + NODE_H / 2 - 4}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+          <text x="${cx + 12}" y="${p.y + NODE_H / 2 + 10}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">${escapeXml(diagramValue(detail))}</text>
         </g>
       `);
       return;
@@ -1557,6 +1613,8 @@ function redrawDiagram() {
           <rect x="${cx - term / 2}" y="${p.y + NODE_H - term + 1}" width="${term}" height="${term}" fill="${style.color}"/>
           <circle cx="${cx}" cy="${c1y}" r="${r}" fill="#FFFFFF" stroke="${style.color}" stroke-width="1.8"/>
           <circle cx="${cx}" cy="${c2y}" r="${r}" fill="none" stroke="${style.color}" stroke-width="1.8"/>
+          <text x="${cx + r + 10}" y="${p.y + NODE_H / 2 - 4}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+          <text x="${cx + r + 10}" y="${p.y + NODE_H / 2 + 10}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">${escapeXml(diagramValue(detail))} kVA</text>
         </g>
       `);
       return;
@@ -1573,20 +1631,26 @@ function redrawDiagram() {
           <rect x="${cx - term / 2}" y="${p.y + NODE_H - term + 1}" width="${term}" height="${term}" fill="${style.color}"/>
           <circle cx="${cx}" cy="${cy}" r="${r}" fill="#FFFFFF" stroke="${style.color}" stroke-width="1.8"/>
           <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="11" fill="${style.color}" font-family="Calibri, Arial" font-weight="bold">GE</text>
+          <text x="${cx + r + 10}" y="${p.y + NODE_H / 2 - 4}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+          <text x="${cx + r + 10}" y="${p.y + NODE_H / 2 + 10}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">${escapeXml(diagramValue(detail))} kVA</text>
         </g>
       `);
       return;
     }
 
     if (n.type === "tableaux") {
-      const cx = p.x + NODE_W / 2;
-      const textY = p.y + NODE_H / 2 + 4;
-      const underlineW = Math.max(34, n.id.length * 7.2);
+      const cx = p.x + p.width / 2;
+      // A switchboard is drawn at the bottom of its grid cells so each
+      // outgoing connection starts immediately below its bus bar.
+      const textY = p.y + NODE_H - 20;
+      const labelX = p.x + 8;
+      const hasAmont = edges.some((edge) => edge.to === n.id);
       parts.push(`
         <g>
           <title>${escapeXml(`${style.label}: ${n.id}`)}</title>
-          <text x="${cx}" y="${textY}" text-anchor="middle" font-size="12.5" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
-          <line x1="${cx - underlineW / 2}" y1="${textY + 6}" x2="${cx + underlineW / 2}" y2="${textY + 6}" stroke="#1B2A3A" stroke-width="1.3"/>
+          ${hasAmont ? `<line x1="${cx}" y1="${p.y}" x2="${cx}" y2="${textY + 7}" stroke="#4B5563" stroke-width="1.6"/>` : ""}
+          <text x="${labelX}" y="${textY}" text-anchor="start" font-size="12.5" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+          <rect x="${p.x + 6}" y="${textY + 7}" width="${p.width - 12}" height="10" rx="2" fill="${style.color}"/>
         </g>
       `);
       return;
@@ -1598,6 +1662,8 @@ function redrawDiagram() {
         <rect x="${p.x + 18}" y="${p.y + 18}" width="44" height="44" fill="${style.color}"/>
         <rect x="${p.x + 12}" y="${p.y + 12}" width="56" height="6" fill="${style.color}"/>
         <rect x="${p.x + 12}" y="${p.y + 62}" width="56" height="6" fill="${style.color}"/>
+        <text x="${p.x + NODE_W + 8}" y="${p.y + NODE_H / 2 - 4}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+        <text x="${p.x + NODE_W + 8}" y="${p.y + NODE_H / 2 + 10}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">${escapeXml([data.puissance, data.unite].filter((v) => v !== null && v !== undefined && v !== "").join(" ") || "—")}</text>
       </g>
     `);
   });
@@ -2352,7 +2418,7 @@ function labelColumnFor(cfg) {
   return (preferred || nonPk[0] || cfg.columns[0]).name;
 }
 
-async function fetchOptions(refTable) {
+async function fetchOptions(refTable, labelColumn, valueColumn) {
   // `tag` is an internal registry and can retain an orphan tag after an
   // equipment deletion.  For an upstream selector, only offer components
   // that still exist and can therefore appear in the synoptic.
@@ -2368,8 +2434,8 @@ async function fetchOptions(refTable) {
 
   const refCfg = SCHEMA[refTable];
   const rows = await Api.list(refTable);
-  const labelCol = labelColumnFor(refCfg);
-  const pkCol = refCfg.pk[0];
+  const labelCol = labelColumn || labelColumnFor(refCfg);
+  const pkCol = valueColumn || refCfg.pk[0];
   return rows.map((r) => ({
     value: r[pkCol],
     text: r[labelCol] && String(r[labelCol]) !== String(r[pkCol]) ? `${r[pkCol]} (${r[labelCol]})` : `${r[pkCol]}`,
@@ -2399,7 +2465,7 @@ async function buildFieldInputs(container, cfg, idPrefix, prefillData, disablePk
       emptyOpt.textContent = col.optional ? "-- aucun --" : "-- choisir --";
       input.appendChild(emptyOpt);
       try {
-        const options = await fetchOptions(optionsTable);
+        const options = await fetchOptions(optionsTable, col.options_label, col.options_value);
         options.forEach((o) => {
           const opt = document.createElement("option");
           opt.value = o.value;
@@ -2509,6 +2575,13 @@ async function saveEditEquipment() {
     await Api.update(table, pkValues, data);
     closeModal();
     await loadEquipementsView();
+    // Keep the data-entry view and the synoptic in sync with every edit.
+    const activeTable = document.querySelector(".tab-btn.active")?.dataset.table;
+    if (activeTable === table) {
+      await renderForm(cfg, table);
+      await renderTableView(cfg, table);
+    }
+    await renderDiagramView();
   } catch (e) {
     errorEl.textContent = e.message;
   }
@@ -2611,6 +2684,13 @@ async function renderTableView(cfg, table) {
       tr.appendChild(td);
     });
     const tdAction = document.createElement("td");
+    if (cfg.auto_tag_type) {
+      const editBtn = document.createElement("button");
+      editBtn.className = "secondary btn-edit";
+      editBtn.textContent = "Modifier";
+      editBtn.onclick = () => openEditEquipmentModal(row[cfg.pk[0]], table);
+      tdAction.appendChild(editBtn);
+    }
     const delBtn = document.createElement("button");
     delBtn.className = "btn-del";
     delBtn.textContent = "Supprimer";

@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, render_template, jsonify
 from backend.db import init_db, NoActiveProject
 from backend.routes.api import api
@@ -11,6 +13,10 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.register_blueprint(api)
 app.register_blueprint(projects_bp)
 
+# Gunicorn importe ce module sans executer le bloc __main__. Initialiser ici
+# garantit qu'un projet SQLite actif existe egalement sur Render.
+init_db()
+
 
 @app.errorhandler(NoActiveProject)
 def handle_no_active_project(e):
@@ -22,11 +28,20 @@ def index():
     return render_template("index.html", version=APP_VERSION)
 
 
+@app.get("/health")
+def health():
+    """Point de controle utilise par Render pour verifier le service."""
+    return {"status": "ok", "version": APP_VERSION}
+
+
 if __name__ == "__main__":
-    init_db()
     print(f"=== NormaGrid {APP_VERSION} ===")
     try:
-        app.run(debug=True, host="0.0.0.0", port=5000)
+        app.run(
+            debug=os.environ.get("FLASK_DEBUG") == "1",
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", "5000")),
+        )
     except OSError as e:
         print("\nERREUR : le port 5000 est deja utilise par un autre programme.")
         print("Fermez toute fenetre/terminal ou un ancien 'python app.py' tournerait encore,")

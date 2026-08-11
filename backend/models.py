@@ -64,12 +64,60 @@ TABLES = {
         ],
         "fk": {},
     },
+    "reference_charges": {
+        "label": "Charges standard (reference)",
+        "pk": ["id"],
+        "columns": [
+            {"name": "id", "label": "ID", "type": "number", "pk": True},
+            {"name": "designation", "label": "Designation", "type": "text"},
+            {"name": "type_conso", "label": "Type consommation", "type": "text"},
+            {"name": "consom", "label": "Consommation", "type": "text"},
+            {"name": "p_electrique_w", "label": "Puissance electrique (W)", "type": "number"},
+            {"name": "cos_phi", "label": "Cos phi", "type": "number"},
+            {"name": "un_min", "label": "Un min", "type": "number"},
+            {"name": "un_max", "label": "Un max", "type": "number"},
+        ],
+        "fk": {},
+    },
+    "reference_cables": {
+        "label": "Cables standard (reference)",
+        "pk": ["id"],
+        "columns": [
+            {"name": "id", "label": "ID", "type": "number", "pk": True},
+            {"name": "designation", "label": "Designation", "type": "text"},
+            {"name": "famille_cable", "label": "Famille cable", "type": "text"},
+            {"name": "section", "label": "Section", "type": "text"},
+            {"name": "section_reelle", "label": "Section reelle", "type": "number"},
+            {"name": "nb_conducteur", "label": "Nombre de conducteurs", "type": "number"},
+            {"name": "metal_ame", "label": "Metal ame", "type": "number"},
+            {"name": "is_arme", "label": "Arme", "type": "number"},
+            {"name": "iz_air", "label": "Iz air", "type": "number"},
+            {"name": "un", "label": "Tension nominale", "type": "number"},
+        ],
+        "fk": {},
+    },
     "reference_puissances_transfos_kva": {
         "label": "Puissances transformateurs (reference)",
-        "pk": ["value"],
+        "pk": ["puissance_kva"],
+        "order_by": "puissance_kva ASC",
         "columns": [
-            {"name": "value", "label": "Valeur (kVA)", "type": "number", "pk": True},
-            {"name": "label", "label": "Libelle", "type": "text"},
+            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number", "pk": True},
+            {"name": "hta_kv", "label": "HTA (kV)", "type": "number"},
+            {"name": "bt_v", "label": "BT (V)", "type": "number"},
+            {"name": "couplage", "label": "Couplage", "type": "text"},
+            {"name": "isolant", "label": "Isolant", "type": "text"},
+            {"name": "uk_ute_pct", "label": "Uk UTE (%)", "type": "number"},
+            {"name": "p0_ute_w", "label": "P0 UTE (W)", "type": "number"},
+            {"name": "pk_ute_w", "label": "Pk UTE (W)", "type": "number"},
+            {"name": "i0_ute_pct", "label": "I0 UTE (%)", "type": "number"},
+            {"name": "p0_tier2_max_w", "label": "P0 Tier 2 max (W)", "type": "number"},
+            {"name": "pk_tier2_max_w", "label": "Pk Tier 2 max (W)", "type": "number"},
+            {"name": "gain_p0_w", "label": "Gain P0 (W)", "type": "number"},
+            {"name": "reduction_p0_pct", "label": "Reduction P0 (%)", "type": "number"},
+            {"name": "gain_pk_w", "label": "Gain Pk (W)", "type": "number"},
+            {"name": "reduction_pk_pct", "label": "Reduction Pk (%)", "type": "number"},
+            {"name": "in_bt_a", "label": "In BT (A)", "type": "number"},
+            {"name": "ik3_ute_approx_ka", "label": "Ik3 UTE approx. (kA)", "type": "number"},
         ],
         "fk": {},
     },
@@ -102,7 +150,7 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number", "options_table": "reference_puissances_transfos_kva"},
+            {"name": "puissance_kva", "label": "Puissance (kVA)", "type": "number", "options_table": "reference_puissances_transfos_kva", "options_label": "puissance_kva"},
             {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
             {"name": "protection_modele", "label": "Protection (modele)", "type": "text", "optional": True},
             {"name": "calibre_a", "label": "Calibre (A)", "type": "number", "optional": True},
@@ -145,7 +193,7 @@ TABLES = {
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
             {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
-            {"name": "type", "label": "Type", "type": "text", "options_table": "reference_charge_types"},
+            {"name": "type", "label": "Type", "type": "text", "options_table": "reference_cables", "options_value": "designation", "options_label": "designation"},
             {"name": "section", "label": "Section", "type": "text", "optional": True},
             {"name": "longueur_m", "label": "Longueur (m)", "type": "number", "optional": True},
             {"name": "protection_modele", "label": "Protection (modele)", "type": "text", "optional": True},
@@ -161,7 +209,7 @@ TABLES = {
         "columns": [
             {"name": "tag_id", "label": "Tag", "type": "text", "pk": True},
             {"name": "site_id", "label": "Site", "type": "text", "fk": "site"},
-            {"name": "type", "label": "Type", "type": "text"},
+            {"name": "type", "label": "Type", "type": "text", "options_table": "reference_charges", "options_value": "designation", "options_label": "designation"},
             {"name": "unite", "label": "Unite", "type": "text"},
             {"name": "cos_phi", "label": "Cos \u03c6", "type": "number"},
             {"name": "amont_id", "label": "Amont", "type": "text", "fk": "tag"},
@@ -222,7 +270,9 @@ def list_rows(table):
     cfg = TABLES[table]
     cols = ", ".join(c["name"] for c in cfg["columns"])
     conn = get_connection()
-    rows = conn.execute(f"SELECT {cols} FROM {table}").fetchall()
+    order_by = cfg.get("order_by")
+    query = f"SELECT {cols} FROM {table}" + (f" ORDER BY {order_by}" if order_by else "")
+    rows = conn.execute(query).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -521,9 +571,13 @@ def get_graph():
         "tableaux": "SELECT tag_id AS id, site_id, type AS detail FROM tableaux",
         "transfos": "SELECT tag_id AS id, site_id, puissance_kva AS detail FROM transfos",
         "groupes_electrogenes": "SELECT tag_id AS id, site_id, puissance_kva AS detail FROM groupes_electrogenes",
-        "reseau_ht": "SELECT tag_id AS id, site_id, nom AS detail FROM reseau_ht",
+        "reseau_ht": """
+            SELECT tag_id AS id, site_id, nom AS detail,
+                   pcc_max_mva, x_r_max, pcc_min_mva, x_r_min
+            FROM reseau_ht
+        """,
         "cable": "SELECT tag_id AS id, site_id, type AS detail FROM cable",
-        "charge": "SELECT tag_id AS id, site_id, type AS detail FROM charge",
+        "charge": "SELECT tag_id AS id, site_id, type AS detail, puissance, unite FROM charge",
     }
     for table, query in detail_queries.items():
         for row in conn.execute(query).fetchall():
@@ -532,6 +586,10 @@ def get_graph():
                 "type": table,
                 "site_id": row["site_id"],
                 "detail": row["detail"],
+                "data": {
+                    key: row[key] for key in row.keys()
+                    if key not in {"id", "site_id", "detail"}
+                },
             }
 
     edges = []
