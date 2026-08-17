@@ -204,7 +204,12 @@
   <div class="modal-box" id="modal-open-project" style="display:none;">
     <h3>Ouvrir un projet</h3>
     <div id="open-project-list" class="project-list"></div>
-    <div class="field" style="margin-top:0.9rem;">
+    <div class="field" id="open-project-upload-field" style="margin-top:0.9rem;">
+      <label for="open-project-file">Importer un fichier .db depuis cet ordinateur</label>
+      <input type="file" id="open-project-file" accept=".db">
+      <p class="field-hint">Le fichier est copie sur le serveur puis devient le projet ouvert.</p>
+    </div>
+    <div class="field" id="open-project-path-field" style="margin-top:0.9rem;">
       <label for="open-project-path">Chemin complet d'un fichier .db</label>
       <div class="field-with-button">
         <input type="text" id="open-project-path" placeholder="ex : C:\Projets\NormaGrid\Chantier.db">
@@ -215,6 +220,7 @@
     <p class="error" id="open-project-error"></p>
     <div class="modal-actions">
       <button class="secondary" id="open-project-cancel" type="button">Annuler</button>
+      <button class="primary" id="open-project-file-confirm" type="button">Importer et ouvrir</button>
       <button class="primary" id="open-project-path-confirm" type="button">Ouvrir ce chemin</button>
     </div>
   </div>

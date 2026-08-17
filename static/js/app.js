@@ -66,6 +66,13 @@ function updateBrowseButtonsAvailability() {
       hint.style.display = "none";
     }
   });
+
+  // Dans un navigateur distant (Render), les chemins et dialogues natifs du
+  // Mac n'existent pas. Le navigateur peut en revanche envoyer un fichier.
+  document.getElementById("open-project-upload-field").style.display = native ? "none" : "block";
+  document.getElementById("open-project-file-confirm").style.display = native ? "none" : "inline-block";
+  document.getElementById("open-project-path-field").style.display = native ? "block" : "none";
+  document.getElementById("open-project-path-confirm").style.display = native ? "inline-block" : "none";
 }
 
 async function init() {
@@ -355,6 +362,27 @@ function wireModals() {
   document.getElementById("open-project-cancel").onclick = () => closeModal();
   document.getElementById("open-project-path-browse").onclick = () =>
     chooseDbFileInto(document.getElementById("open-project-path"), "open");
+  document.getElementById("open-project-file-confirm").onclick = async () => {
+    const fileInput = document.getElementById("open-project-file");
+    const errorEl = document.getElementById("open-project-error");
+    errorEl.textContent = "";
+    if (!fileInput.files.length) {
+      errorEl.textContent = "Choisissez un fichier .db.";
+      return;
+    }
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+    try {
+      const r = await fetch("/api/projects/import-normagrid", { method: "POST", body: formData });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || body.message || "Erreur inconnue");
+      fileInput.value = "";
+      closeModal();
+      await refreshProjectState();
+    } catch (e) {
+      errorEl.textContent = e.message;
+    }
+  };
   document.getElementById("open-project-path-confirm").onclick = async () => {
     const pathInput = document.getElementById("open-project-path");
     const errorEl = document.getElementById("open-project-error");
