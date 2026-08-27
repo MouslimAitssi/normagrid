@@ -653,7 +653,8 @@ def update_row(table, pk_values, data):
         conn.close()
 
 
-def import_caneco_with_overrides(analysis, reseau_ht_tag, amont_overrides, include_charges=False):
+def import_caneco_with_overrides(analysis, reseau_ht_tag, amont_overrides, include_charges=False,
+                                 root_attachment=None):
     """
     Variante de import_caneco_analysis utilisee par le flux d'import en 2
     etapes (apercu puis confirmation) : la correspondance amont est fournie
@@ -664,10 +665,15 @@ def import_caneco_with_overrides(analysis, reseau_ht_tag, amont_overrides, inclu
     Les charges (circuits terminaux) ne sont importees que si include_charges
     est vrai (choix de l'utilisateur, decoche par defaut).
     """
-    reseau = get_row("reseau_ht", [reseau_ht_tag])
-    if not reseau:
-        raise ValueError("Reseau HT introuvable dans ce projet")
-    site_id = reseau["site_id"]
+    attachment_type = (root_attachment or {}).get("type", "reseau_ht")
+    attachment_tag = (root_attachment or {}).get("tag") or reseau_ht_tag
+    if attachment_type not in ("reseau_ht", "tableaux"):
+        raise ValueError("Type de composant amont invalide")
+    attachment = get_row(attachment_type, [attachment_tag])
+    if not attachment:
+        label = "Reseau HT" if attachment_type == "reseau_ht" else "Tableau"
+        raise ValueError(f"{label} de rattachement introuvable dans ce projet")
+    site_id = attachment["site_id"]
 
     report = {
         "tableaux": 0, "transfos": 0, "groupes_electrogenes": 0,
@@ -733,10 +739,11 @@ def import_caneco_with_overrides(analysis, reseau_ht_tag, amont_overrides, inclu
                 source_circuit = c
                 break
 
-        if amont_value == "__RESEAU_HT__" and source_circuit and board_types[board] != "groupes_electrogenes":
+        if (amont_value == "__RESEAU_HT__" and source_circuit
+                and board_types[board] != "groupes_electrogenes"):
             transfo_tag = unique_tag(f"{board} - Transfo arrivee")
             insert_row("transfos", {
-                "tag_id": transfo_tag, "site_id": site_id, "amont_id": reseau_ht_tag,
+                "tag_id": transfo_tag, "site_id": site_id, "amont_id": attachment_tag,
                 "puissance_kva": caneco_import.parse_power_kva(source_circuit.get("consommation")),
             })
             report["transfos"] += 1
@@ -751,8 +758,21 @@ def import_caneco_with_overrides(analysis, reseau_ht_tag, amont_overrides, inclu
             })
             report["cables"] += 1
             amont_for_link = cable_tag
+        elif amont_value == "__RESEAU_HT__" and attachment_type == "tableaux":
+            cable_tag = unique_tag(f"{attachment_tag} - {board} (cable)")
+            insert_row("cable", {
+                "tag_id": cable_tag, "site_id": site_id, "amont_id": attachment_tag,
+                "type": source_circuit.get("cable_type") if source_circuit else None,
+                "section": source_circuit.get("cable_section") if source_circuit else None,
+                "longueur_m": caneco_import.parse_length_m(source_circuit.get("longueur")) if source_circuit else None,
+                "protection_modele": source_circuit.get("protection_modele") if source_circuit else None,
+                "calibre_a": source_circuit.get("calibre_a") if source_circuit else None,
+                "differentiel_ma": source_circuit.get("differentiel_ma") if source_circuit else None,
+            })
+            report["cables"] += 1
+            amont_for_link = cable_tag
         elif amont_value == "__RESEAU_HT__":
-            amont_for_link = reseau_ht_tag
+            amont_for_link = attachment_tag
         else:
             amont_board_tag = board_tag_map.get(amont_value)
             if not amont_board_tag:

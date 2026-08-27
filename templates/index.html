@@ -439,18 +439,22 @@
   <div class="modal-box modal-box-xwide" id="modal-caneco-staging" style="display:none;">
     <h3>Import Caneco - table de preparation</h3>
     <p class="field-hint">
-      Verifiez et corrigez librement chaque champ ci-dessous avant de charger dans la table
-      "Import Caneco" du projet. Cette etape ne cree encore aucun equipement : la conversion en
-      tableaux/transfos/cables/charges se fera dans une etape separee ulterieure.
+      Verifiez et corrigez librement chaque champ ci-dessous. Le chargement cree les
+      tableaux/transfos/cables/charges, puis ouvre automatiquement la synoptique.
     </p>
     <div id="caneco-staging-summary" class="field-hint" style="font-weight:600;"></div>
+    <div class="field" id="caneco-staging-reseau-field">
+      <label for="caneco-staging-reseau-select">Composant amont de rattachement</label>
+      <select id="caneco-staging-reseau-select"></select>
+      <p class="field-hint">Choisissez un reseau HT ou un tableau existant.</p>
+    </div>
     <div id="caneco-staging-table-wrap" class="caneco-preview-table-wrap" style="max-height:55vh;"></div>
     <p class="error" id="caneco-staging-error"></p>
     <div id="caneco-staging-progress" style="display:none;" class="field-hint">Chargement en cours...</div>
     <div id="caneco-staging-report" style="display:none; font-weight:600; color:var(--teal);"></div>
     <div class="modal-actions">
       <button class="secondary" id="caneco-staging-cancel" type="button">Annuler</button>
-      <button class="primary" id="caneco-staging-confirm" type="button">Charger dans la table</button>
+      <button class="primary" id="caneco-staging-confirm" type="button">Charger et afficher la synoptique</button>
     </div>
   </div>
 

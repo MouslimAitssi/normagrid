@@ -300,11 +300,15 @@ def import_caneco_staging_convert():
 
     data = request.get_json(force=True) or {}
     reseau_ht_tag = (data.get("reseau_ht_tag") or "").strip()
+    rattachement_type = (data.get("rattachement_type") or "reseau_ht").strip()
+    rattachement_tag = (data.get("rattachement_tag") or reseau_ht_tag).strip()
     amonts = data.get("amonts") or {}
     include_charges = bool(data.get("include_charges", False))
 
-    if not reseau_ht_tag:
-        return jsonify({"error": "Reseau HT de rattachement manquant."}), 400
+    if rattachement_type not in ("reseau_ht", "tableaux"):
+        return jsonify({"error": "Type de composant amont invalide."}), 400
+    if not rattachement_tag:
+        return jsonify({"error": "Composant amont de rattachement manquant."}), 400
 
     conn = db.get_connection()
     staging_rows = [dict(r) for r in conn.execute(
@@ -318,7 +322,10 @@ def import_caneco_staging_convert():
 
     try:
         analysis = caneco_import.build_analysis_from_staging_rows(staging_rows)
-        report = models.import_caneco_with_overrides(analysis, reseau_ht_tag, amonts, include_charges)
+        report = models.import_caneco_with_overrides(
+            analysis, reseau_ht_tag, amonts, include_charges,
+            root_attachment={"type": rattachement_type, "tag": rattachement_tag},
+        )
     except ValueError as e:
         conn.close()
         return jsonify({"error": str(e)}), 400

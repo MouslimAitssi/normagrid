@@ -1684,14 +1684,25 @@ function redrawDiagram() {
       return;
     }
 
+    // Les charges sont volontairement plus compactes que les composants de
+    // distribution afin de garder les branches terminales de la synoptique
+    // lisibles, meme lorsqu'un tableau alimente beaucoup de recepteurs.
+    const cx = p.x + NODE_W / 2;
+    const bodySize = 18, barWidth = 26, barHeight = 4;
+    const bodyX = cx - bodySize / 2, bodyY = p.y + 31;
+    const topBarY = bodyY - barHeight;
+    const bottomBarY = bodyY + bodySize;
+    const labelX = cx + bodySize / 2 + 6;
     parts.push(`
       <g>
         <title>${escapeXml(`${style.label}: ${n.id}${detail ? ` — ${detail}` : ""}`)}</title>
-        <rect x="${p.x + 18}" y="${p.y + 18}" width="44" height="44" fill="${style.color}"/>
-        <rect x="${p.x + 12}" y="${p.y + 12}" width="56" height="6" fill="${style.color}"/>
-        <rect x="${p.x + 12}" y="${p.y + 62}" width="56" height="6" fill="${style.color}"/>
-        <text x="${p.x + NODE_W + 8}" y="${p.y + NODE_H / 2 - 4}" font-size="10" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
-        <text x="${p.x + NODE_W + 8}" y="${p.y + NODE_H / 2 + 10}" font-size="8.5" fill="#475569" font-family="Calibri, Arial">${escapeXml([data.puissance, data.unite].filter((v) => v !== null && v !== undefined && v !== "").join(" ") || "—")}</text>
+        <line x1="${cx}" y1="${p.y}" x2="${cx}" y2="${topBarY}" stroke="${style.color}" stroke-width="1.6"/>
+        <line x1="${cx}" y1="${bottomBarY + barHeight}" x2="${cx}" y2="${p.y + NODE_H}" stroke="${style.color}" stroke-width="1.6"/>
+        <rect x="${bodyX}" y="${bodyY}" width="${bodySize}" height="${bodySize}" fill="${style.color}"/>
+        <rect x="${cx - barWidth / 2}" y="${topBarY}" width="${barWidth}" height="${barHeight}" fill="${style.color}"/>
+        <rect x="${cx - barWidth / 2}" y="${bottomBarY}" width="${barWidth}" height="${barHeight}" fill="${style.color}"/>
+        <text x="${labelX}" y="${p.y + NODE_H / 2 - 2}" font-size="8" fill="#1B2A3A" font-family="Calibri, Arial" font-weight="bold">${escapeXml(n.id)}</text>
+        <text x="${labelX}" y="${p.y + NODE_H / 2 + 9}" font-size="7" fill="#475569" font-family="Calibri, Arial">${escapeXml([data.puissance, data.unite].filter((v) => v !== null && v !== undefined && v !== "").join(" ") || "—")}</text>
       </g>
     `);
   });
@@ -1793,13 +1804,44 @@ async function runCanecoStagingAnalyze() {
   }
 }
 
-function openCanecoStagingReviewModal() {
+async function openCanecoStagingReviewModal() {
   document.getElementById("caneco-staging-error").textContent = "";
   document.getElementById("caneco-staging-report").style.display = "none";
   document.getElementById("caneco-staging-confirm").style.display = "inline-block";
   document.getElementById("caneco-staging-table-wrap").style.display = "block";
   document.getElementById("caneco-staging-summary").textContent =
     `${CANECO_STAGING_ROWS.length} circuits extraits. Corrigez librement chaque case si besoin, puis confirmez le chargement.`;
+
+  const reseauSelect = document.getElementById("caneco-staging-reseau-select");
+  reseauSelect.innerHTML = "";
+  let reseaux = [];
+  let tableaux = [];
+  try {
+    [reseaux, tableaux] = await Promise.all([Api.list("reseau_ht"), Api.list("tableaux")]);
+  } catch (e) {
+    reseaux = [];
+    tableaux = [];
+  }
+  reseaux.forEach((reseau) => {
+    const option = document.createElement("option");
+    option.value = `reseau_ht:${reseau.tag_id}`;
+    const label = reseau.nom && reseau.nom !== reseau.tag_id
+      ? `${reseau.tag_id} (${reseau.nom})`
+      : reseau.tag_id;
+    option.textContent = `Reseau HT - ${label}`;
+    reseauSelect.appendChild(option);
+  });
+  tableaux.forEach((tableau) => {
+    const option = document.createElement("option");
+    option.value = `tableaux:${tableau.tag_id}`;
+    option.textContent = `Tableau - ${tableau.tag_id}`;
+    reseauSelect.appendChild(option);
+  });
+  document.getElementById("caneco-staging-confirm").disabled = !reseaux.length && !tableaux.length;
+  if (!reseaux.length && !tableaux.length) {
+    document.getElementById("caneco-staging-error").textContent =
+      "Creez d'abord un reseau HT ou un tableau pour rattacher les equipements importes.";
+  }
 
   const headHtml = STAGING_FIELDS.map((f) => `<th>${escapeXml(STAGING_LABELS[f])}</th>`).join("");
   const bodyHtml = CANECO_STAGING_ROWS.map((row) => {
@@ -1819,6 +1861,11 @@ async function runCanecoStagingConfirm() {
   const errorEl = document.getElementById("caneco-staging-error");
   errorEl.textContent = "";
   if (!CANECO_STAGING_ROWS) { errorEl.textContent = "Session expiree, relancez l'analyse."; return; }
+  const rattachement = document.getElementById("caneco-staging-reseau-select").value;
+  if (!rattachement) { errorEl.textContent = "Choisissez un composant amont de rattachement."; return; }
+  const separatorIndex = rattachement.indexOf(":");
+  const rattachementType = rattachement.slice(0, separatorIndex);
+  const rattachementTag = rattachement.slice(separatorIndex + 1);
 
   // relit les valeurs (eventuellement corrigees a la main) directement
   // depuis le tableau affiche, plutot que de garder la version d'origine
@@ -1844,11 +1891,38 @@ async function runCanecoStagingConfirm() {
     });
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || "Erreur inconnue");
-    document.getElementById("caneco-staging-report").textContent =
-      `${body.nb_rows} circuits charges dans la table "Import Caneco".`;
-    document.getElementById("caneco-staging-report").style.display = "block";
-    document.getElementById("caneco-staging-confirm").style.display = "none";
+
+    const previewResponse = await fetch("/api/projects/import-caneco/staging-preview");
+    const preview = await previewResponse.json();
+    if (!previewResponse.ok) throw new Error(preview.error || "Impossible de preparer les equipements.");
+    if (!preview.boards || !preview.boards.length) {
+      throw new Error("Aucun equipement detecte dans les circuits charges.");
+    }
+
+    const amonts = {};
+    preview.boards.forEach((board) => {
+      amonts[board.name] = (board.proposed_amonts || []).slice(0, 2);
+    });
+    const convertResponse = await fetch("/api/projects/import-caneco/staging-convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        reseau_ht_tag: rattachementType === "reseau_ht" ? rattachementTag : "",
+        rattachement_type: rattachementType,
+        rattachement_tag: rattachementTag,
+        amonts,
+        include_charges: true,
+      }),
+    });
+    const converted = await convertResponse.json();
+    if (!convertResponse.ok) {
+      throw new Error(converted.error || "Erreur lors de la creation des equipements.");
+    }
+
     CANECO_STAGING_ROWS = null;
+    closeModal();
+    await loadEquipementsView();
+    showTopView("synoptique");
   } catch (e) {
     errorEl.textContent = e.message;
     document.getElementById("caneco-staging-table-wrap").style.display = "block";
