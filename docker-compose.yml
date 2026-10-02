@@ -1,0 +1,14 @@
+services:
+  normagrid:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - normagrid-data:/var/data
+    environment:
+      - NORMAGRID_DATA_DIR=/var/data
+      - PORT=8080
+    restart: unless-stopped
+
+volumes:
+  normagrid-data:
